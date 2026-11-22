@@ -14,9 +14,9 @@ dependencies = [
 ]
 
 [project.scripts]
-sandbox = "student.cli.sandbox_cli:main"
-agent-mbpp = "student.cli.agent_mbpp:main"
-agent-swebench = "student.cli.agent_swebench:main"
+sandbox = "src.cli.sandbox_cli:main"
+agent-mbpp = "src.cli.agent_mbpp:main"
+agent-swebench = "src.cli.agent_swebench:main"
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
@@ -24,4 +24,4 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
-module-name = "student"
+module-name = "src"
