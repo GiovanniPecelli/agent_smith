@@ -1,19 +1,27 @@
 [project]
 name = "agent-smith"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agent Smith - Autonomous reasoning, code generation, and execution"
 readme = "README.md"
 authors = [
     { name = "Giovanni Pecelli", email = "imgiovannipecelli@protonmail.com" }
 ]
 requires-python = ">=3.10,<3.11"
 dependencies = [
+    "httpx>=0.28.1",
     "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
 ]
 
 [project.scripts]
-agent-smith = "agent_smith:main"
+sandbox = "student.cli.sandbox_cli:main"
+agent-mbpp = "student.cli.agent_mbpp:main"
+agent-swebench = "student.cli.agent_swebench:main"
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "student"
