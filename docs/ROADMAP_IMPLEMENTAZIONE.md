@@ -4,7 +4,49 @@
 
 ---
 
-## 1. Struttura del Repository Consigliata
+## 👥 Divisione dei Ruoli nel Team
+
+Il progetto è suddiviso in due macro-aree complementari e parallele:
+
+### 🛡️ `gpecelli` (Giovanni Pecelli) — Sandbox & Server MCP
+*Responsabile dell'ambiente di esecuzione controllato, della sicurezza e degli strumenti esterni:*
+- **Motore Sandbox (`src/sandbox/sandbox.py`)**:
+  - Implementazione dei controlli di sicurezza (filtro `authorized_imports`, percorsi `allowed_directories`, blocco socket di rete, timeout 30s con `signal`, limite RAM 512MB con `resource`).
+  - Iniezione nativa di `final_answer(answer)` e gestione dell'eccezione `FinalAnswerException`.
+  - Gestione della persistenza del namespace tra step successivi.
+- **REPL Interattivo (`src/cli/sandbox_cli.py`)**:
+  - CLI per il comando `uv run sandbox` (con flag per config e server MCP).
+- **Server MCP alla Radice**:
+  - `mcp_tools_mbpp.py`: tool `run_tests(code, test_list)`.
+  - `mcp_tools_swebench.py`: lettura di `TESTBED_PATH` e implementazione dei tool obbligatori di file system (`read_file`, `edit_file`, `list_files`), code search (`search_code`, `search_function_or_class_definition_in_code`, `find_references`) ed esecuzione (`run_tests`, `get_patch`, `run_command`).
+- **Obiettivo Valutazione**: Superamento di `exam_sandbox.sh` e test isolato dei tool MCP.
+
+---
+
+### 🧠 `gipimpin` — Client LLM & Loop Agentico (Orchestratore)
+*Responsabile dell'intelligenza, della comunicazione con i provider e del ciclo di ragionamento autonomo:*
+- **Client LLM (`src/agent/llm_client.py`)**:
+  - Gestione delle chiamate HTTP verso i provider (OpenRouter, Google Gemini, Groq).
+  - Rotazione automatica multi-token per gestire gli errori HTTP 429 (Rate Limit).
+  - Tracciamento metriche (`input_tokens`, `output_tokens`, `request_time_ms`, `retries`).
+- **Extraction Layer Polimorfo (`src/agent/extraction.py`)**:
+  - Normalizzazione in codice Python pulito dei diversi formati generati dai modelli (Markdown, XML `<invoke>`, JSON `<tool_call>`, ReAct).
+- **Prompt & Manual Generator (`src/agent/prompts.py`)**:
+  - System prompt e generazione dinamica del manuale dei tool MCP connessi.
+- **Loop Orchestrator & CLI Runner (`src/agent/orchestrator.py`, `agent_mbpp.py`, `agent_swebench.py`)**:
+  - Ciclo `Thought ➔ Code ➔ Observation` e generazione del file finale `solution.json`.
+- **Obiettivo Valutazione**: Superamento dei test di risoluzione dei task su `exam_mbpp.sh` e `exam_swebench.sh`.
+
+---
+
+### 🤝 Lavoro Insieme (`gpecelli` & `gipimpin`)
+- Integrazione tra Orchestratore e Sandbox tramite il metodo `sandbox.execute(code)`.
+- Esecuzione dei test congiunti e benchmark su 5 modelli x 3 task per **`BENCHMARK_REPORT.md`**.
+- Redazione finale del **`README.md`** ufficiale.
+
+---
+
+## 1. Struttura del Repository
 
 Seguendo le convenzioni standard di Python e quanto richiesto dal subject:
 
@@ -21,20 +63,19 @@ Seguendo le convenzioni standard di Python e quanto richiesto dal subject:
 ├── config/
 │   ├── sandbox_config.json     # Configurazione di default dei limiti del sandbox
 │   └── models_config.json      # Elenco provider, modelli ed endpoint
+├── sandbox_template.json       # Collegamento simbolico a config/sandbox_config.json
 │
-├── student/                    # Il core del codice sorgente dell'agente
+├── src/                        # Il core del codice sorgente dell'agente
 │   ├── __init__.py
-│   ├── models/                 # Schemi Pydantic
+│   ├── models/                 # Schemi Pydantic (Fase 1 - Completata)
 │   │   ├── __init__.py
 │   │   ├── sandbox.py          # SandboxConfig
 │   │   ├── tasks.py            # MBPPTaskInput, SWEBenchTaskInput
 │   │   └── metrics.py          # StepMetrics, SolutionOutput
-│   ├── sandbox/                # Il Sandbox di esecuzione sicura
+│   ├── sandbox/                # Il Sandbox di esecuzione sicura (gpecelli)
 │   │   ├── __init__.py
-│   │   ├── environment.py      # Esecutore sandboxed, override builtins, timeout
-│   │   ├── security.py         # Controllo allowlist import e percorsi file
-│   │   └── mcp_client.py       # Client MCP (trasporto stdio e HTTP)
-│   ├── agent/                  # Il loop autonomo dell'agente
+│   │   └── sandbox.py          # Esecutore sandboxed, sicurezza, final_answer
+│   ├── agent/                  # Il loop autonomo dell'agente (gipimpin)
 │   │   ├── __init__.py
 │   │   ├── orchestrator.py     # Loop Thought ➔ Code ➔ Observation
 │   │   ├── extraction.py       # Parser polimorfo (Markdown, XML, JSON, ReAct)

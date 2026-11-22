@@ -15,18 +15,18 @@ Questa cartella contiene tutti i documenti necessari per comprendere l'architett
    - **Formato di output `solution.json`** e requisiti di trasparenza.
 
 2. [**ROADMAP_IMPLEMENTAZIONE.md**](file:///home/gpecelli/Desktop/agent_smith/docs/ROADMAP_IMPLEMENTAZIONE.md)
-   - **Struttura cartelle consigliata** per il repository.
-   - **Le 8 Fasi (Milestone) di sviluppo in ordine logico**:
-     - Fase 1: Schemi Pydantic (`SolutionOutput`, `StepMetrics`, `SandboxConfig`, ecc.).
-     - Fase 2: Motore Sandbox di sicurezza (filtro import, directory permesse, timeout, `final_answer`, REPL interattivo).
-     - Fase 3: Server MCP (`mcp_tools_mbpp.py`, `mcp_tools_swebench.py`) e client MCP.
-     - Fase 4: Client LLM con rotazione multi-token (Groq, OpenRouter, Google AI Studio).
-     - Fase 5: Extraction Layer polimorfo (Markdown, XML, JSON, ReAct) e System Prompt.
-     - Fase 6: Agente MBPP (`agent_mbpp`).
-     - Fase 7: Agente SWE-bench (`agent_swebench`) e gestione Docker/TESTBED.
-     - Fase 8: Benchmark Report (`BENCHMARK_REPORT.md` su 5 modelli e 3 task).
+   - **Divisione del team**: Ruoli di `gpecelli` (Sandbox & MCP) e `gipimpin` (LLM & Loop).
+   - **Struttura cartelle** del repository.
+   - **Le 8 Fasi (Milestone) di sviluppo** in ordine logico.
 
-3. [**SPECIFICHE_TECNICHE_E_TOOLS.md**](file:///home/gpecelli/Desktop/agent_smith/docs/SPECIFICHE_TECNICHE_E_TOOLS.md)
+3. [**TEAM_ORGANIZATION.md**](file:///home/gpecelli/Desktop/agent_smith/docs/TEAM_ORGANIZATION.md)
+   - **Contratto di Architettura**: Ruoli precisi di `gpecelli` e `gipimpin`.
+   - **API Boundary**: L'interfaccia esatta con cui l'Orchestratore di Gipimpin invoca il Sandbox di Gpecelli.
+
+4. [**TASK_BOARD.md**](file:///home/gpecelli/Desktop/agent_smith/docs/TASK_BOARD.md)
+   - **Kanban Checklist**: Elenco delle attività spuntabili assegnate a ciascun membro.
+
+5. [**SPECIFICHE_TECNICHE_E_TOOLS.md**](file:///home/gpecelli/Desktop/agent_smith/docs/SPECIFICHE_TECNICHE_E_TOOLS.md)
    - **Firme e formati di output dei tool MCP obbligatori**:
      - `read_file` (formato numerato `cat -n`), `edit_file`, `list_files`.
      - `search_code` (formato grep `path:line content`), `search_function_or_class_definition_in_code`, `find_references`.
