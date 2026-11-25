@@ -26,3 +26,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 module-name = "src"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.6",
+]

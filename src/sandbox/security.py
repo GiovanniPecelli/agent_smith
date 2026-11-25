@@ -1,13 +1,14 @@
-from contextlib import redirect_stdout, redirect_stderr
-from typing import Any, Callable, Dict, Optional
+import builtins
+import io
+import resource
+import signal
+import socket
+import time
+from collections.abc import Callable
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
-import builtins
-import resource
-import socket
-import signal
-import time
-import io
+from typing import Any
 
 from src.models import SandboxConfig
 
@@ -25,7 +26,6 @@ class FinalAnswerException(Exception):
 
 class SecurityError(Exception):
     """Base exception raised when sandboxed code attempts to violate safety rules."""
-    pass
 
 
 @dataclass
@@ -37,9 +37,9 @@ class SandboxExecutionResult:
     """
     stdout: str = ""
     stderr: str = ""
-    error: Optional[str] = None
+    error: str | None = None
     is_final: bool = False
-    final_answer: Optional[str] = None
+    final_answer: str | None = None
     execution_time_seconds: float = 0.0
 
 
@@ -68,7 +68,7 @@ class Sandbox:
         # - safe builtins (open, __import__), final_answer, MCP tools
         # - variables created by LLM that persist across execute() calls
         # Populated by _setup_namespace() below
-        self.namespace: Dict[str, Any] = {}
+        self.namespace: dict[str, Any] = {}
         self._setup_namespace()
 
     def _setup_namespace(self) -> None:
@@ -116,8 +116,8 @@ class Sandbox:
     def _safe_import(
         self,
         name: str,
-        globals: Optional[Dict[str, Any]] = None,
-        locals: Optional[Dict[str, Any]] = None,
+        globals: dict[str, Any] | None = None,
+        locals: dict[str, Any] | None = None,
         fromlist: tuple = (),
         level: int = 0,
     ) -> Any:

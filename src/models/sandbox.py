@@ -1,4 +1,4 @@
-from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -9,7 +9,7 @@ class SandboxConfig(BaseModel):
     Everything else is blocked by default.
     """
 
-    authorized_imports: List[str] = Field(
+    authorized_imports: list[str] = Field(
         default_factory=lambda: [
             "math",
             "math.*",
@@ -33,7 +33,7 @@ class SandboxConfig(BaseModel):
             "cmath",
         ]
     )
-    allowed_directories: List[str] = Field(
+    allowed_directories: list[str] = Field(
         default_factory=lambda: ["/testbed", "/tmp/agent"]
     )
     max_execution_time_seconds: int = 30

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """MCP Server for MBPP - provides run_tests tool."""
-from contextlib import redirect_stdout, redirect_stderr
-
+import io
 import json
 import sys
-import io
+from contextlib import redirect_stderr, redirect_stdout
 
 
 def run_tests(code: str, test_list: list) -> dict:

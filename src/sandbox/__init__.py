@@ -1,8 +1,8 @@
 from src.sandbox.security import (
+    FinalAnswerException,
     Sandbox,
     SandboxExecutionResult,
-    FinalAnswerException,
-    SecurityError
+    SecurityError,
 )
 
-__all__ = ["Sandbox", "SandboxExecutionResult", "FinalAnswerException", "SecurityError"]
+__all__ = ["FinalAnswerException", "Sandbox", "SandboxExecutionResult", "SecurityError"]

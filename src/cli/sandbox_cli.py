@@ -1,12 +1,11 @@
-from pathlib import Path
-from typing import Any
-import subprocess
 import argparse
 import json
+import subprocess
 import sys
+from typing import Any
 
-from src.sandbox import Sandbox, SandboxExecutionResult
 from src.models import SandboxConfig
+from src.sandbox import Sandbox, SandboxExecutionResult
 
 
 def mcp_initialize(mcp_proc: subprocess.Popen) -> dict:
@@ -39,7 +38,7 @@ def mcp_list_tools(mcp_proc: subprocess.Popen) -> list:
         "method": "tools/list",
         "params": {}
     }
-    # send the request in to the standard input
+    # send the request to the standard input
     mcp_proc.stdin.write(json.dumps(request) + "\n")
     mcp_proc.stdin.flush()
 
