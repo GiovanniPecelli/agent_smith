@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 import subprocess
 import argparse
 import json
@@ -28,6 +29,53 @@ def mcp_initialize(mcp_proc: subprocess.Popen) -> dict:
     response_line = mcp_proc.stdout.readline()
     # Parse JSON response string back to Python dict
     return json.loads(response_line)
+
+
+def mcp_list_tools(mcp_proc: subprocess.Popen) -> list:
+    """Send tools/list request and return list of available tools."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    }
+    # send the request in to the standard input
+    mcp_proc.stdin.write(json.dumps(request) + "\n")
+    mcp_proc.stdin.flush()
+
+    # read the answer from the standard output. it comes in a single line.
+    response_line = mcp_proc.stdout.readline()
+    # json.loads transform the line in a valid python dict
+    response = json.loads(response_line)
+
+    # return the list tools that are in the result->tools dict
+    return response["result"]["tools"]
+
+
+def mcp_call_tool(
+    mcp_proc: subprocess.Popen,
+    tool_name: str,
+    arguments: dict
+) -> Any:
+    """Send tools/call request and return tool result."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": tool_name,
+            "arguments": arguments
+        }
+    }
+    mcp_proc.stdin.write(json.dumps(request) + "\n")
+    mcp_proc.stdin.flush()
+    response_line = mcp_proc.stdout.readline()
+    response = json.loads(response_line)
+
+    if "error" in response:
+        raise Exception(response["error"]["message"])
+
+    return response["result"]
 
 
 def main() -> int:
@@ -80,6 +128,21 @@ def main() -> int:
         # Handshake: initialize + tools/list
         init_resp = mcp_initialize(mcp_proc)
         print(f"[MCP] Initialized: {init_resp}", file=sys.stderr)
+
+        tools = mcp_list_tools(mcp_proc)
+        print(
+            f"[MCP] Tools available: {[t['name'] for t in tools]}",
+            file=sys.stderr
+        )
+        for tool in tools:
+            tool_name = tool["name"]
+
+            def make_wrapper(name: str):
+                def wrapper(*args: Any, **kwargs: Any) -> Any:
+                    return mcp_call_tool(mcp_proc, name, kwargs)
+                return wrapper
+            
+            sandbox.register_tool(tool_name, make_wrapper(tool_name))
 
     # REPL loop
     print("Agent Smith Sandbox REPL. Type 'exit' or Ctrl+D to quit.")

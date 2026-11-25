@@ -63,13 +63,13 @@ class Sandbox:
         self._orig_open = builtins.open
         self._orig_import = builtins.__import__
         self._orig_socket = None
-        self._setup_namespace()
 
         # self.namespace is the persistent globals() for exec():
         # - safe builtins (open, __import__), final_answer, MCP tools
         # - variables created by LLM that persist across execute() calls
-        # Initialized empty here, populated by _setup_namespace()
+        # Populated by _setup_namespace() below
         self.namespace: Dict[str, Any] = {}
+        self._setup_namespace()
 
     def _setup_namespace(self) -> None:
         """Prepare the execution global namespace.
@@ -79,6 +79,8 @@ class Sandbox:
         - The native final_answer function
         - Disables or removes dangerous builtins
         """
+        # NOTE: copy the built-in python dict: have all the built-in python
+        # function as: open, print, len, sum, int, str, __import__, ecc.
         safe_builtins = builtins.__dict__.copy()
 
         safe_builtins["open"] = self._safe_open
