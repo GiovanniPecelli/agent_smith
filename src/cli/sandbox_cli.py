@@ -143,7 +143,7 @@ def main() -> int:
             
             sandbox.register_tool(tool_name, make_wrapper(tool_name))
 
-    # REPL loop
+    # REPL loop -> (Read-Eval-Print Loop)
     print("Agent Smith Sandbox REPL. Type 'exit' or Ctrl+D to quit.")
     print("Type 'reset' to clear namespace.")
 

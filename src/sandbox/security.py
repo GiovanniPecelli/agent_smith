@@ -1,3 +1,4 @@
+import ast
 import builtins
 import io
 import resource
@@ -55,6 +56,23 @@ class Sandbox:
     - Persistent namespace variables between consecutive steps of a task
     """
 
+    _BLOCKED_ATTRS = frozenset({
+        "__subclasses__",
+        "__bases__",
+        "__base__",
+        "__mro__",
+        "__globals__",
+        "__builtins__",
+        "__code__",
+        "__closure__",
+        "__func__",
+        "__self__",
+        "__dict__",
+        "__loader__",
+        "__spec__",
+        "__import__",
+    })
+
     def __init__(self, config: SandboxConfig):
         """Initialize the sandbox with security limits and configuration."""
         self.config = config
@@ -62,7 +80,7 @@ class Sandbox:
         # native functions
         self._orig_open = builtins.open
         self._orig_import = builtins.__import__
-        self._orig_socket = None
+        self._orig_socket = socket.socket
 
         # self.namespace is the persistent globals() for exec():
         # - safe builtins (open, __import__), final_answer, MCP tools
@@ -70,6 +88,9 @@ class Sandbox:
         # Populated by _setup_namespace() below
         self.namespace: dict[str, Any] = {}
         self._setup_namespace()
+
+        # saving the original memory limit
+        self._orig_rlimit = resource.getrlimit(resource.RLIMIT_AS)
 
     def _setup_namespace(self) -> None:
         """Prepare the execution global namespace.
@@ -83,8 +104,18 @@ class Sandbox:
         # function as: open, print, len, sum, int, str, __import__, ecc.
         safe_builtins = builtins.__dict__.copy()
 
+        # remove dangerous builtins functions
+        for name in ("eval", "exec", "compile", "breakpoint"):
+            safe_builtins.pop(name, None)
+
+        def _blocked_input(*args: Any, **kwargs: Any) -> Any:
+            raise PermissionError(
+                "Interactive input() is blocked by sandbox policy."
+            )
+
         safe_builtins["open"] = self._safe_open
         safe_builtins["__import__"] = self._safe_import
+        safe_builtins["input"] = _blocked_input
 
         self.namespace = {
             "__name__": "__sandbox__",
@@ -93,8 +124,24 @@ class Sandbox:
             "final_answer": self._final_answer,
         }
 
+    def _validate_ast(self, code: str) -> None:
+        """
+        Inspect AST before execution to block dunder attribute introspection.
+        """
+        tree = ast.parse(code, mode="exec")
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr in self._BLOCKED_ATTRS
+            ):
+                raise SecurityError(
+                    f"Access to attribute '{node.attr}' "
+                    "is blocked by sandbox policy."
+                )
+
     def _is_import_authorized(self, module_name: str) -> bool:
-        """Check if a module is authorized by the authorized_imports allowlist.
+        """
+        Check if a module is authorized by the authorized_imports allowlist
         
         Supports wildcards such as 'math.*', 'collections.*', 'typing.*'.
         Returns True if permitted, False otherwise.
@@ -176,9 +223,7 @@ class Sandbox:
 
     def _block_network(self) -> None:
         """Disable socket creation to prevent all network communication."""
-        self._orig_socket = socket.socket
-
-        def blocked_socket(*args, **kwargs):
+        def blocked_socket(*args: Any, **kwargs: Any) -> Any:
             raise PermissionError(
                 "Network access is blocked by sandbox policy"
             )
@@ -242,9 +287,15 @@ class Sandbox:
         
         try:
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+                self._validate_ast(code)
                 # exec(code, self.namespace) is like execute python in REPL
                 # >>python ...
                 # the result is saved in the namespace dict to let persistence
+                # NOTE: 
+                # Normalmente exec(code) userebbe le variabili globali del tuo
+                # file security.py. Passandogli self.namespace, dici a Python:
+                # "Esegui questo codice dentro questo dizionario chiuso,
+                # facendogli credere che siano le sue variabili globali"
                 exec(code, self.namespace)
             
             result.stdout = stdout_buf.getvalue()
@@ -261,24 +312,28 @@ class Sandbox:
             result.stderr = stderr_buf.getvalue()
 
         except TimeoutError as e:
-            result.error = str(e)
+            result.stdout = stdout_buf.getvalue()
             result.stderr = stderr_buf.getvalue()
+            result.error = f"{e} (partial output captured)"
 
         except MemoryError:
+            result.stdout = stdout_buf.getvalue()
+            result.stderr = stderr_buf.getvalue()
             result.error = (
                 "MemoryError: Exceeded "
                 f"{self.config.max_memory_mb}MB limit"
             )
-            result.stderr = stderr_buf.getvalue()
 
         except Exception as e:
-            result.error = f"{type(e).__name__}: {e}"
+            result.stdout = stdout_buf.getvalue()
             result.stderr = stderr_buf.getvalue()
+            result.error = f"{type(e).__name__}: {e}"
             
         finally:
             # ALWAYS: alarm deactivation and restore the orignial handler
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old_handler)
+            socket.socket = self._orig_socket
 
         # CHECK the time started in line 235
         result.execution_time_seconds = time.perf_counter() - start_time
@@ -290,6 +345,5 @@ class Sandbox:
         """
         if self._orig_socket is not None:
             socket.socket = self._orig_socket
-            self._orig_socket = None
 
         self._setup_namespace()
