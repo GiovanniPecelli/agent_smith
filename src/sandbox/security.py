@@ -90,6 +90,8 @@ class Sandbox:
         self._setup_namespace()
 
         # saving the original memory limit
+        # resource.getrlimit(resource.RLIMIT_AS) returns a 2-tuple
+        # (soft_limit, hard_limit) where both values are integers in bytes
         self._orig_rlimit = resource.getrlimit(resource.RLIMIT_AS)
 
     def _setup_namespace(self) -> None:
@@ -126,7 +128,10 @@ class Sandbox:
 
     def _validate_ast(self, code: str) -> None:
         """
+        Abstract Syntax Tree
+
         Inspect AST before execution to block dunder attribute introspection.
+        AST checks the code without executes a single instruction
         """
         tree = ast.parse(code, mode="exec")
         for node in ast.walk(tree):
@@ -233,7 +238,14 @@ class Sandbox:
     def _apply_memory_limit(self) -> None:
         """Set virtual memory limit (RLIMIT_AS) as defined in config.max_memory_mb."""
         limit_bytes = self.config.max_memory_mb * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+        _, hard = self._orig_rlimit
+
+        # RLIM_INFINITY = (-1 default)
+        safe_soft = (
+            min(limit_bytes, hard)
+            if hard != resource.RLIM_INFINITY else limit_bytes
+        )
+        resource.setrlimit(resource.RLIMIT_AS, (safe_soft, hard))
 
     def _final_answer(self, answer: Any) -> None:
         """Native function injected directly into the sandbox namespace.
@@ -289,7 +301,7 @@ class Sandbox:
             with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                 self._validate_ast(code)
                 # exec(code, self.namespace) is like execute python in REPL
-                # >>python ...
+                # >> ... (receives all the llm generated code in one line)
                 # the result is saved in the namespace dict to let persistence
                 # NOTE: 
                 # Normalmente exec(code) userebbe le variabili globali del tuo
@@ -334,9 +346,11 @@ class Sandbox:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old_handler)
             socket.socket = self._orig_socket
+            resource.setrlimit(resource.RLIMIT_AS, self._orig_rlimit)
 
         # CHECK the time started in line 235
         result.execution_time_seconds = time.perf_counter() - start_time
+
         return result
 
     def reset(self) -> None:

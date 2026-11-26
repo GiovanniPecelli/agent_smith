@@ -2,11 +2,24 @@
 """MCP Server for MBPP - provides run_tests tool."""
 import io
 import json
+import signal
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 
 
-def run_tests(code: str, test_list: list) -> dict:
+def _timeout_handler(signum, frame):
+    """
+    Python’s internal C runtime (signal module) supplies those two arguments
+    automatically at the exact moment the OS kernel delivers the signal.
+    """
+    raise TimeoutError("Test execution timed out")
+
+
+def run_tests(
+    code: str,
+    test_list: list[str],
+    timeout_seconds: int = 10
+) -> dict:
     """
     Execute code against test assertions.
     Returns JSON-serializable dict.
@@ -15,26 +28,31 @@ def run_tests(code: str, test_list: list) -> dict:
     l'output stderr e stderr consultabile: senza i buffer l'output sparisce
     nel terminale del server, l'LLM non riceve feedback.
     """
-    stdout_buf = io.StringIO()
-    stderr_buf = io.StringIO()
 
     # namespace for exec
-    namespace = {}
+    namespace: dict = {}
+    stdout_buf = io.StringIO()
+
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(timeout_seconds)
 
     try:
         with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
             # define the function
             exec(code, namespace)
-
             for test in test_list:
                 exec(test, namespace)
 
         return {"success": True, "output": "All tests passed"}
+    except TimeoutError as e:
+        return {"success": False, "output": str(e)}
     except AssertionError as e:
         return {"success": False, "output": f"Assertion failed: {e}"}
     except Exception as e:
         return {"success": False, "output": f"{type(e).__name__}: {e}"}
-
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 def handle_initialize(req_id: int) -> dict:
     """Handle initialize request - return server capabilities."""
@@ -92,7 +110,19 @@ def handle_tools_call(req_id: int, params: dict) -> dict:
         code = arguments.get("code", "")
         test_list = arguments.get("test_list", [])
         result = run_tests(code, test_list)
-        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result),
+                    }
+                ],
+                "isError": not result.get("success", False),
+            },
+        }
 
     return error_response(req_id, -32601, f"Unknown tool: {tool_name}")
 
@@ -108,11 +138,24 @@ def main():
         line = line.strip()
         if not line:
             continue
-        request = json.loads(line)
+
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError as e:
+            # -32700 is the official standard code for Parse Error
+            # defined in the JSON-RPC 2.0 specification
+            response = error_response(None, -32700, f"Parse error: {e}")
+            print(json.dumps(response), flush=True)
+            continue
+
 
         method = request.get("method")
         req_id = request.get("id")
         params = request.get("params", {})
+
+        # JSON-RPC notifications (no 'id') must not receive a response
+        if req_id is None or method.startswith("notifications/"):
+            continue
 
         if method == "initialize":
             response = handle_initialize(req_id)
