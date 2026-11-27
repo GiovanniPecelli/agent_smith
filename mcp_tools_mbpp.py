@@ -32,6 +32,17 @@ def run_tests(
     # namespace for exec
     namespace: dict = {}
     stdout_buf = io.StringIO()
+    stderr_buf = io.StringIO()
+
+    def _with_captured_output(message: str) -> str:
+        out = stdout_buf.getvalue().strip()
+        err = stderr_buf.getvalue().strip()
+        parts = [message]
+        if out:
+            parts.append(f"Stdout:\n{out}")
+        if err:
+            parts.append(f"Stderr:\n{err}")
+        return "\n".join(parts)
 
     old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
     signal.alarm(timeout_seconds)
@@ -43,13 +54,25 @@ def run_tests(
             for test in test_list:
                 exec(test, namespace)
 
-        return {"success": True, "output": "All tests passed"}
+        return {
+            "success": True,
+            "output": _with_captured_output("All tests passed")
+        }
     except TimeoutError as e:
-        return {"success": False, "output": str(e)}
+        return {
+            "success": False,
+            "output": _with_captured_output(str(e))
+        }
     except AssertionError as e:
-        return {"success": False, "output": f"Assertion failed: {e}"}
+        return {
+            "success": False,
+            "output": _with_captured_output(f"Assertion failed: {e}")
+        }
     except Exception as e:
-        return {"success": False, "output": f"{type(e).__name__}: {e}"}
+        return {
+            "success": False,
+            "output": _with_captured_output(f"{type(e).__name__}: {e}")
+        }
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old_handler)
@@ -105,10 +128,20 @@ def handle_tools_call(req_id: int, params: dict) -> dict:
     """Execute a tool call for tools/call request."""
     tool_name = params.get("name")
     arguments = params.get("arguments", {})
+    if not isinstance(arguments, dict):
+        return error_response(
+            req_id,
+            -32602,
+            "Invalid params: 'arguments' must be an object"
+        )
 
     if tool_name == "run_tests":
         code = arguments.get("code", "")
         test_list = arguments.get("test_list", [])
+
+        if not isinstance(code, str) or not isinstance(test_list, list):
+            return error_response(req_id, -32602, "Invalid params")
+
         result = run_tests(code, test_list)
         return {
             "jsonrpc": "2.0",
@@ -148,10 +181,23 @@ def main():
             print(json.dumps(response), flush=True)
             continue
 
+        if not isinstance(request, dict):
+            response = error_response(
+                None,
+                -32600,
+                "Invalid Request: expected JSON object"
+            )
+            print(json.dumps(response), flush=True)
+            continue
 
-        method = request.get("method")
+        method = request.get("method") or ""
         req_id = request.get("id")
         params = request.get("params", {})
+
+        if not isinstance(method, str) or not isinstance(params, dict):
+            response = error_response(req_id, -32600, "Invalid Request")
+            print(json.dumps(response), flush=True)
+            continue
 
         # JSON-RPC notifications (no 'id') must not receive a response
         if req_id is None or method.startswith("notifications/"):
